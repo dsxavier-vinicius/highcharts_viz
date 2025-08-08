@@ -20,7 +20,7 @@ looker.plugins.visualizations.add({
     const container = document.getElementById("chart-container");
     container.innerHTML = "";
 
-    // Carregar Highcharts se não estiver carregado
+    // Carregar Highcharts dinamicamente se necessário
     if (typeof Highcharts === "undefined") {
       const script = document.createElement("script");
       script.src = "https://code.highcharts.com/highcharts.js";
@@ -29,37 +29,47 @@ looker.plugins.visualizations.add({
       return;
     }
 
-    // Validar a estrutura dos dados
-    if (queryResponse.fields.dimensions.length !== 1 || queryResponse.fields.measures.length < 1) {
-      container.innerHTML = "This visualization requires 1 dimension and at least 1 measure.";
+    if (
+      queryResponse.fields.dimensions.length !== 1 ||
+      queryResponse.fields.measures.length < 2
+    ) {
+      container.innerHTML = "Use 1 dimension and at least 2 measures (height, width).";
       doneRendering();
       return;
     }
 
     const dimension = queryResponse.fields.dimensions[0];
-    const measures = queryResponse.fields.measures;
+    const [heightMeasure, widthMeasure] = queryResponse.fields.measures;
 
     const categories = [];
-    const series = measures.map((measure) => ({
-      name: measure.label_short,
-      data: [],
-    }));
+    const dataPoints = [];
 
-    // Para largura variável: usar a primeira measure como width
-    const widthReference = measures[0].name;
+    let maxWidth = 0;
+    let minWidth = Infinity;
 
     data.forEach((row) => {
       const category = LookerCharts.Utils.textForCell(row[dimension.name]);
-      categories.push(category);
+      const height = row[heightMeasure.name]?.value;
+      const width = row[widthMeasure.name]?.value;
 
-      measures.forEach((measure, index) => {
-        const value = row[measure.name]?.value;
-        series[index].data.push({
-          y: value,
-          width: row[widthReference]?.value || 1,
-        });
-      });
+      if (typeof height !== "number" || typeof width !== "number") return;
+
+      categories.push(category);
+      dataPoints.push({ y: height, widthValue: width });
+
+      if (width > maxWidth) maxWidth = width;
+      if (width < minWidth) minWidth = width;
     });
+
+    // Normalizar width para um range usável pelo Highcharts
+    const scale = 60; // ajustar para mudar a espessura geral
+    const normalizedData = dataPoints.map((point) => ({
+      y: point.y,
+      pointWidth:
+        minWidth === maxWidth
+          ? scale
+          : ((point.widthValue - minWidth) / (maxWidth - minWidth)) * scale + 10, // largura mínima = 10
+    }));
 
     Highcharts.chart("chart-container", {
       chart: {
@@ -76,37 +86,33 @@ looker.plugins.visualizations.add({
       },
       yAxis: {
         title: {
-          text: null,
+          text: heightMeasure.label_short,
         },
       },
-      legend: {
-        enabled: true,
-      },
+      legend: { enabled: false },
       tooltip: {
-        shared: true,
         formatter: function () {
-          let s = `<b>${this.x}</b>`;
-          this.points.forEach((point) => {
-            s += `<br/>${point.series.name}: ${Highcharts.numberFormat(point.y, 2)}`;
-          });
-          return s;
+          return `<b>${this.x}</b><br/>
+            ${heightMeasure.label_short}: ${Highcharts.numberFormat(this.y, 2)}<br/>
+            ${widthMeasure.label_short}: ${Highcharts.numberFormat(
+            dataPoints[this.point.index].widthValue,
+            0
+          )}`;
         },
       },
       plotOptions: {
-        column: {
-          pointPadding: 0,
-          borderWidth: 0,
-          groupPadding: 0.1,
-          pointWidth: null,
-        },
         series: {
-          pointWidth: null,
           dataLabels: {
             enabled: config.showValues,
           },
         },
       },
-      series: series,
+      series: [
+        {
+          name: heightMeasure.label_short,
+          data: normalizedData,
+        },
+      ],
     });
 
     doneRendering();
