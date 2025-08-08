@@ -37,19 +37,23 @@ looker.plugins.visualizations.add({
 
   updateAsync: function (data, element, config, queryResponse, details, done) {
     try {
-      if (queryResponse.fields.dimensions.length < 2 || queryResponse.fields.measures.length < 1) {
-        element.innerHTML = "This chart requires 2 dimensions and 1 measure.";
+      if (queryResponse.fields.dimensions.length < 1 || queryResponse.fields.measures.length < 2) {
+        element.innerHTML = "This chart requires 1 dimension and 2 measures.";
         return done();
       }
 
-      const xLabels = [];
-      const yValues = [];
+      const dimension = queryResponse.fields.dimensions[0].name;
+      const measureValue = queryResponse.fields.measures[0].name;
+      const measureWidth = queryResponse.fields.measures[1].name;
+
+      const labels = [];
+      const values = [];
       const widths = [];
 
       data.forEach(row => {
-        xLabels.push(row[queryResponse.fields.dimensions[0].name].value);
-        widths.push(Number(row[queryResponse.fields.dimensions[1].name].value));
-        yValues.push(Number(row[queryResponse.fields.measures[0].name].value));
+        labels.push(row[dimension].value);
+        values.push(Number(row[measureValue].value));
+        widths.push(Number(row[measureWidth].value));
       });
 
       const barColor = config.bar_color || "#FF9999";
@@ -58,12 +62,12 @@ looker.plugins.visualizations.add({
       let colors = [];
       if (useColorByPoint) {
         const palette = LookerCharts.Utils.getPalette(config.palette || "default");
-        colors = palette.colors.slice(0, xLabels.length);
+        colors = palette.colors.slice(0, values.length);
       }
 
-      const seriesData = xLabels.map((label, i) => ({
+      const seriesData = labels.map((label, i) => ({
         name: label,
-        y: yValues[i],
+        y: values[i],
         pointWidth: widths[i],
         color: useColorByPoint ? colors[i] : barColor
       }));
@@ -76,7 +80,7 @@ looker.plugins.visualizations.add({
           text: null
         },
         xAxis: {
-          categories: xLabels,
+          categories: labels,
           labels: {
             rotation: -45
           }
