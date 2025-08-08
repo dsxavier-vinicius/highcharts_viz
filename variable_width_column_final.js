@@ -2,95 +2,75 @@ looker.plugins.visualizations.add({
   id: "variable_width_column_final",
   label: "Variable Width Column High",
   options: {},
-  create: function(element, config) {
-    element.innerHTML = "<div id='container' style='width: 100%; height: 100%;'></div>";
+  create: function (element) {
+    element.innerHTML = "<div id='container'></div>";
   },
-  updateAsync: function(data, element, config, queryResponse, details, done) {
-    const container = element.querySelector("#container");
-    container.innerHTML = "";
+  updateAsync: function (data, element, config, queryResponse, details, done) {
+    try {
+      if (!data || !data.length || !queryResponse.fields.dimensions.length || queryResponse.fields.measures.length < 2) {
+        element.innerHTML = "<div style='color: red; padding: 1em;'>This visualization requires 1 dimension and 2 or more measures.</div>";
+        done();
+        return;
+      }
 
-    const xDimension = queryResponse.fields.dimensions[0];
-    const heightMeasure = queryResponse.fields.measures[0];
-    const widthMeasure = queryResponse.fields.measures[1];
+      const dimension = queryResponse.fields.dimensions[0];
+      const [widthMeasure, heightMeasure] = queryResponse.fields.measures;
 
-    if (!xDimension || !heightMeasure || !widthMeasure) {
-      container.innerHTML = "<p>Insira pelo menos uma dimensão e duas medidas.</p>";
-      done();
-      return;
-    }
+      const categories = data.map(row => row[dimension.name]?.value || '');
+      const seriesData = data.map(row => ({
+        x: row[dimension.name]?.value || '',
+        y: row[heightMeasure.name]?.value || 0,
+        z: row[widthMeasure.name]?.value || 0,
+        tooltip: queryResponse.fields.measures.map(m => `${m.label}: ${row[m.name]?.rendered || row[m.name]?.value}`).join("<br>")
+      }));
 
-    const categories = data.map(row => LookerCharts.Utils.textForCell(row[xDimension]));
-    const chartData = data.map((row, i) => {
-      const height = +row[heightMeasure].value;
-      const width = +row[widthMeasure].value;
-      const color = Highcharts.getOptions().colors[i % Highcharts.getOptions().colors.length];
-
-      return {
-        x: i,
-        y: height,
-        width: width,
-        color: color,
-        name: categories[i],
-        custom: {
-          xValue: LookerCharts.Utils.textForCell(row[xDimension]),
-          heightLabel: `${heightMeasure.label}: ${LookerCharts.Utils.textForCell(row[heightMeasure])}`,
-          widthLabel: `${widthMeasure.label}: ${LookerCharts.Utils.textForCell(row[widthMeasure])}`
-        }
-      };
-    });
-
-    const totalWidth = chartData.reduce((acc, d) => acc + d.width, 0);
-    chartData.forEach(point => point.pointWidth = (point.width / totalWidth) * 800);
-
-    Highcharts.chart(container, {
-      chart: {
-        type: 'column',
-        spacing: [10, 10, 15, 10],
-        animation: true,
-      },
-      title: { text: null },
-      xAxis: {
-        categories: categories,
-        labels: { rotation: -30, style: { fontSize: '12px' } },
-        title: { text: xDimension.label }
-      },
-      yAxis: {
-        title: { text: heightMeasure.label }
-      },
-      tooltip: {
-        useHTML: true,
-        formatter: function() {
-          return `<b>${this.point.custom.xValue}</b><br/>` +
-                 `${this.point.custom.heightLabel}<br/>` +
-                 `${this.point.custom.widthLabel}`;
-        }
-      },
-      legend: { enabled: false },
-      credits: { enabled: false },
-      exporting: { enabled: false },
-      plotOptions: {
-        column: {
-          grouping: false,
-          shadow: false,
-          borderWidth: 0,
-          pointPadding: 0.2,
-          groupPadding: 0.15,
-          pointWidth: null,
-          dataLabels: {
-            enabled: true,
-            formatter: function() {
-              return Highcharts.numberFormat(this.y, 0, ",", ".");
-            },
-            style: { fontWeight: 'bold', fontSize: '10px' }
+      Highcharts.chart('container', {
+        chart: {
+          type: 'column',
+          height: 500,
+          spacingBottom: 30
+        },
+        title: { text: null },
+        xAxis: {
+          categories: categories,
+          title: { text: dimension.label },
+          labels: {
+            rotation: -45,
+            style: { fontSize: '12px' }
           }
-        }
-      },
-      series: [{
-        name: heightMeasure.label,
-        data: chartData
-      }]
-    });
-
+        },
+        yAxis: {
+          title: { text: heightMeasure.label }
+        },
+        tooltip: {
+          useHTML: true,
+          formatter: function () {
+            return `<b>${this.point.x}</b><br>${this.point.tooltip}`;
+          }
+        },
+        plotOptions: {
+          column: {
+            pointPadding: 0,
+            borderWidth: 0,
+            groupPadding: 0.1,
+            pointWidth: null
+          },
+          series: {
+            grouping: false,
+            shadow: false
+          }
+        },
+        series: [{
+          name: heightMeasure.label,
+          data: seriesData,
+          colorByPoint: true
+        }],
+        credits: { enabled: false },
+        exporting: { enabled: false }
+      });
+    } catch (err) {
+      element.innerHTML = `<div style='color: red; padding: 1em;'>Error rendering visualization: ${err.message}</div>`;
+    }
     done();
   }
 });
