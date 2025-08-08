@@ -2,9 +2,9 @@ looker.plugins.visualizations.add({
   id: "variable_width_column_final",
   label: "Variable Width Column High",
 
-  // Aqui é onde se garante o carregamento do Highcharts
   dependencies: [
-    "https://code.highcharts.com/highcharts.js"
+    "https://code.highcharts.com/highcharts.js",
+    "https://code.highcharts.com/modules/variwide.js"
   ],
 
   options: {
@@ -17,22 +17,6 @@ looker.plugins.visualizations.add({
       type: "boolean",
       label: "Show Data Labels",
       default: true
-    },
-    legendEnabled: {
-      type: "boolean",
-      label: "Show Legend",
-      default: true
-    },
-    legendPosition: {
-      type: "string",
-      label: "Legend Position",
-      default: "bottom",
-      values: [
-        { label: "Bottom", value: "bottom" },
-        { label: "Top", value: "top" },
-        { label: "Left", value: "left" },
-        { label: "Right", value: "right" }
-      ]
     }
   },
 
@@ -53,82 +37,66 @@ looker.plugins.visualizations.add({
       }
 
       const dimension = queryResponse.fields.dimensions[0];
-      const measureY = queryResponse.fields.measures[0]; // Altura
-      const measureWidth = queryResponse.fields.measures[1]; // Largura
+      const measureY = queryResponse.fields.measures[0];
+      const measureWidth = queryResponse.fields.measures[1];
 
       const categories = [];
-      const dataSeries = [];
+      const chartData = [];
 
       data.forEach(row => {
         const category = LookerCharts.Utils.textForCell(row[dimension.name]);
-        const yValue = row[measureY.name]?.value || 0;
-        const widthValue = row[measureWidth.name]?.value || 1;
+        const y = row[measureY.name]?.value || 0;
+        const z = row[measureWidth.name]?.value || 1;
 
         categories.push(category);
-        dataSeries.push({
-          y: yValue,
-          z: widthValue,
-          name: category
-        });
+        chartData.push([category, y, z]); // [name, y, z]
       });
 
       Highcharts.chart('chart', {
         chart: {
-          type: 'column'
+          type: 'variwide',
+          accessibility: {
+            enabled: false
+          }
         },
-        title: {
-          text: ''
-        },
+        title: { text: null },
         xAxis: {
+          type: 'category',
           categories: categories,
           labels: {
             rotation: config.xAxisRotation || 0
-          },
-          title: {
-            text: dimension.label
           }
         },
         yAxis: {
-          min: 0,
           title: {
             text: measureY.label
           }
         },
-        legend: {
-          enabled: config.legendEnabled,
-          align: config.legendPosition === "left" || config.legendPosition === "right" ? config.legendPosition : "center",
-          verticalAlign: config.legendPosition === "top" || config.legendPosition === "bottom" ? config.legendPosition : "middle",
-          layout: config.legendPosition === "left" || config.legendPosition === "right" ? "vertical" : "horizontal"
-        },
         tooltip: {
-          pointFormat: `<b>{point.name}</b><br>${measureY.label}: <b>{point.y:,.0f}</b><br>${measureWidth.label}: <b>{point.z:,.0f}</b>`
+          pointFormat: `
+            <b>{point.name}</b><br>
+            ${measureY.label}: <b>{point.y:,.0f}</b><br>
+            ${measureWidth.label}: <b>{point.z:,.0f}</b>
+          `
         },
         plotOptions: {
-          column: {
-            pointPadding: 0.2,
-            borderWidth: 0,
+          variwide: {
             dataLabels: {
               enabled: config.showDataLabels,
               format: '{point.y:,.0f}'
             }
-          },
-          series: {
-            pointWidth: null
           }
         },
         series: [{
           name: measureY.label,
-          data: dataSeries.map(p => ({
-            name: p.name,
-            y: p.y,
-            z: p.z
-          }))
-        }]
+          data: chartData
+        }],
+        credits: { enabled: false }
       });
 
       done();
-    } catch (error) {
-      this.container.innerHTML = `<div style="color: red;">Error rendering visualization:<br>${error}</div>`;
+    } catch (err) {
+      this.container.innerHTML = `<div style="color: red;">Error rendering visualization:<br>${err}</div>`;
       done();
     }
   }
