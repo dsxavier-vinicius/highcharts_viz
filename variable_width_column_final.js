@@ -2,119 +2,113 @@ looker.plugins.visualizations.add({
   id: "variable_width_column_final",
   label: "Variable Width Column High",
   options: {
-    showValues: {
+    show_values: {
       type: "boolean",
-      label: "Show Values",
+      label: "Show Values on Bars",
       default: true
     },
-    rotateXLabels: {
-      type: "boolean",
-      label: "Rotate X Labels",
-      default: false
+    x_axis_label_rotation: {
+      type: "number",
+      label: "X-Axis Label Rotation",
+      default: 0
+    },
+    width_measure_index: {
+      type: "number",
+      label: "Index of Measure for Bar Width (0-based)",
+      default: 1
     }
   },
   create: function (element, config) {
-    element.innerHTML = "<div id='chart-container' style='width:100%; height:100%;'></div>";
+    element.innerHTML = "<div id='container' style='width:100%; height:100%;'></div>";
   },
-  updateAsync: function (data, element, config, queryResponse, details, doneRendering) {
-    const container = document.getElementById("chart-container");
-    container.innerHTML = "";
-
-    // Carregar Highcharts dinamicamente se necessário
+  updateAsync: function (data, element, config, queryResponse, details, done) {
     if (typeof Highcharts === "undefined") {
-      const script = document.createElement("script");
-      script.src = "https://code.highcharts.com/highcharts.js";
-      script.onload = () => this.updateAsync(data, element, config, queryResponse, details, doneRendering);
-      document.head.appendChild(script);
+      element.innerHTML = "<div style='color:red;'>Error: Highcharts is not defined. Please ensure the Highcharts library is available.</div>";
+      done();
       return;
     }
 
-    if (
-      queryResponse.fields.dimensions.length !== 1 ||
-      queryResponse.fields.measures.length < 2
-    ) {
-      container.innerHTML = "Use 1 dimension and at least 2 measures (height, width).";
-      doneRendering();
+    const container = element.querySelector("#container");
+    if (!data || data.length === 0 || !queryResponse || !queryResponse.fields || !queryResponse.fields.dimensions || !queryResponse.fields.measures) {
+      container.innerHTML = "<div style='color:red;'>No data available</div>";
+      done();
       return;
     }
 
     const dimension = queryResponse.fields.dimensions[0];
-    const [heightMeasure, widthMeasure] = queryResponse.fields.measures;
+    const measures = queryResponse.fields.measures;
+    const widthIndex = config.width_measure_index || 1;
+    const heightIndex = widthIndex === 0 ? 1 : 0;
 
-    const categories = [];
-    const dataPoints = [];
+    const categories = data.map(row => row[dimension.name]?.rendered || row[dimension.name]?.value || "");
+    const heightData = data.map(row => parseFloat(row[measures[heightIndex]?.name]?.value || 0));
+    const widthData = data.map(row => parseFloat(row[measures[widthIndex]?.name]?.value || 0));
 
-    let maxWidth = 0;
-    let minWidth = Infinity;
+    const totalWidth = widthData.reduce((sum, val) => sum + val, 0);
+    const normalizedWidth = widthData.map(w => w / totalWidth);
 
-    data.forEach((row) => {
-      const category = LookerCharts.Utils.textForCell(row[dimension.name]);
-      const height = row[heightMeasure.name]?.value;
-      const width = row[widthMeasure.name]?.value;
-
-      if (typeof height !== "number" || typeof width !== "number") return;
-
-      categories.push(category);
-      dataPoints.push({ y: height, widthValue: width });
-
-      if (width > maxWidth) maxWidth = width;
-      if (width < minWidth) minWidth = width;
-    });
-
-    // Normalizar width para um range usável pelo Highcharts
-    const scale = 60; // ajustar para mudar a espessura geral
-    const normalizedData = dataPoints.map((point) => ({
-      y: point.y,
-      pointWidth:
-        minWidth === maxWidth
-          ? scale
-          : ((point.widthValue - minWidth) / (maxWidth - minWidth)) * scale + 10, // largura mínima = 10
-    }));
-
-    Highcharts.chart("chart-container", {
+    Highcharts.chart(container, {
       chart: {
         type: "column",
+        spacingBottom: 50
       },
-      title: {
-        text: null,
-      },
+      title: { text: null },
       xAxis: {
         categories: categories,
         labels: {
-          rotation: config.rotateXLabels ? -45 : 0,
-        },
+          rotation: config.x_axis_label_rotation || 0
+        }
       },
       yAxis: {
         title: {
-          text: heightMeasure.label_short,
-        },
+          text: measures[heightIndex].label
+        }
       },
-      legend: { enabled: false },
+      legend: {
+        enabled: false
+      },
       tooltip: {
         formatter: function () {
-          return `<b>${this.x}</b><br/>
-            ${heightMeasure.label_short}: ${Highcharts.numberFormat(this.y, 2)}<br/>
-            ${widthMeasure.label_short}: ${Highcharts.numberFormat(
-            dataPoints[this.point.index].widthValue,
-            0
-          )}`;
-        },
+          const pointIndex = this.point.index;
+          return `<b>${categories[pointIndex]}</b><br/>${measures[heightIndex].label}: ${Highcharts.numberFormat(heightData[pointIndex], 0)}<br/>${measures[widthIndex].label}: ${Highcharts.numberFormat(widthData[pointIndex], 0)}`;
+        }
       },
       plotOptions: {
-        series: {
+        column: {
+          pointPadding: 0,
+          groupPadding: 0,
+          borderWidth: 0,
+          pointWidth: null,
           dataLabels: {
-            enabled: config.showValues,
-          },
+            enabled: config.show_values,
+            formatter: function () {
+              return Highcharts.numberFormat(this.y, 0);
+            }
+          }
         },
+        series: {
+          pointWidth: null,
+          point: {
+            events: {
+              afterAnimate: function () {
+                const points = this.series.points;
+                const plotWidth = this.series.chart.plotSizeX;
+                const adjustedWidths = normalizedWidth.map(n => n * plotWidth);
+                points.forEach((p, i) => {
+                  p.graphic && p.graphic.attr({ width: adjustedWidths[i] });
+                });
+              }
+            }
+          }
+        }
       },
-      series: [
-        {
-          name: heightMeasure.label_short,
-          data: normalizedData,
-        },
-      ],
+      series: [{
+        name: measures[heightIndex].label,
+        data: heightData,
+        color: '#33A1FD'
+      }]
     });
 
-    doneRendering();
-  },
+    done();
+  }
 });
