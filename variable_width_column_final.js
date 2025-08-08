@@ -1,93 +1,98 @@
+// variable_width_column_final.js
 
 looker.plugins.visualizations.add({
   id: "variable_width_column_final",
   label: "Variable Width Column High",
   options: {},
 
-  create: function(element, config) {
-    element.innerHTML = '<div id="chart-container" style="width:100%; height:500px;"></div>';
-
-    function loadScript(src, callback) {
-      const script = document.createElement('script');
-      script.src = src;
-      script.onload = callback;
-      document.head.appendChild(script);
-    }
-
-    if (!window.Highcharts || !window.Highcharts.exporting) {
-      loadScript("https://code.highcharts.com/highcharts.js", () => {
-        this.highchartsLoaded = true;
-      });
-    } else {
-      this.highchartsLoaded = true;
-    }
+  create: function (element, config) {
+    element.innerHTML = "<div id='container' style='width:100%; height:100%;'></div>";
   },
 
-  updateAsync: function(data, element, config, queryResponse, details, done) {
-    if (!this.highchartsLoaded) {
-      setTimeout(() => this.updateAsync(data, element, config, queryResponse, details, done), 100);
-      return;
-    }
+  updateAsync: function (data, element, config, queryResponse, details, doneRendering) {
+    const container = element.querySelector("#container");
+    container.innerHTML = "";
 
-    const dimension = queryResponse.fields.dimensions[0];
-    const measure = queryResponse.fields.measures[0];
-    const volumeField = queryResponse.fields.measures[1];
+    const categories = [];
+    const seriesData = [];
 
-    const rawData = data.map(row => ({
-      name: row[dimension.name].value,
-      y: row[measure.name].value,
-      z: volumeField ? row[volumeField.name].value : 100
-    }));
+    const dimension = queryResponse.fields.dimension_like[0];
+    const heightMeasure = queryResponse.fields.measure_like[0];
+    const widthMeasure = queryResponse.fields.measure_like[1];
 
-    const maxZ = Math.max(...rawData.map(d => d.z));
-    const maxPointWidth = 100;
+    const maxWidth = Math.max(...data.map(d => +d[widthMeasure.name].value));
 
-    const dataWithWidth = rawData.map(d => ({
-      name: d.name,
-      y: d.y,
-      pointWidth: (d.z / maxZ) * maxPointWidth
-    }));
+    data.forEach(row => {
+      const dim = LookerCharts.Utils.htmlForCell(row[dimension.name]);
+      const heightValue = +row[heightMeasure.name].value;
+      const widthValue = +row[widthMeasure.name].value;
 
-    Highcharts.chart('chart-container', {
+      categories.push(dim);
+      seriesData.push({
+        y: heightValue,
+        width: widthValue / maxWidth, // Normalize width (0-1)
+        name: dim,
+        custom: {
+          heightLabel: row[heightMeasure.name].rendered,
+          widthLabel: row[widthMeasure.name].rendered
+        }
+      });
+    });
+
+    Highcharts.chart(container, {
       chart: {
-        type: 'column',
-        animation: { duration: 1000 },
-        spacingTop: 20
+        type: "column",
+        inverted: false
       },
-      title: { text: null },
-      subtitle: { text: null },
+      title: {
+        text: null
+      },
       xAxis: {
-        type: 'category',
-        title: { text: dimension.label },
-        labels: { rotation: -45 }
+        categories: categories,
+        title: {
+          text: dimension.label
+        },
+        labels: {
+          rotation: -45
+        }
       },
       yAxis: {
-        min: 0,
-        title: { text: measure.label }
+        title: {
+          text: heightMeasure.label
+        }
       },
       tooltip: {
-        headerFormat: '<b>{point.name}</b><br>',
-        pointFormat:
-          measure.label + ': ${point.y:,.0f}' +
-          (volumeField ? '<br>' + volumeField.label + ': {point.pointWidth:.0f}' : '')
+        formatter: function () {
+          return `
+            <b>${this.point.name}</b><br/>
+            ${heightMeasure.label}: ${this.point.custom.heightLabel}<br/>
+            ${widthMeasure.label}: ${this.point.custom.widthLabel}
+          `;
+        }
       },
       plotOptions: {
         column: {
-          dataLabels: {
-            enabled: true,
-            format: '${y:,.0f}'
-          }
+          pointPadding: 0,
+          borderWidth: 0,
+          pointWidth: undefined // Let width come from zones
+        },
+        series: {
+          animation: true
         }
       },
-      exporting: { enabled: false },
-      credits: { enabled: false },
       series: [{
-        name: measure.label,
-        data: dataWithWidth,
+        name: heightMeasure.label,
+        data: seriesData,
         colorByPoint: true
-      }]
+      }],
+      exporting: {
+        enabled: false
+      },
+      credits: {
+        enabled: false
+      }
     });
 
-    done();
+    doneRendering();
   }
 });
