@@ -56,7 +56,7 @@ looker.plugins.visualizations.add({
     }));
 
     const maxZ = Math.max(...rawData.map(d => d.z));
-    const maxPointWidth = 100;
+    const maxPointWidth = 50;
 
     const dataWithWidth = rawData.map(d => ({
       name: d.name,
