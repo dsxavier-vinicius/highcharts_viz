@@ -56,14 +56,18 @@ looker.plugins.visualizations.add({
     }));
 
     const maxZ = Math.max(...rawData.map(d => d.z));
-    const maxPointWidth = 100;
+    const minWidth = 12;      // largura mínima das barras
+    const maxWidth = 90;      // largura máxima permitida
 
-    const dataWithWidth = rawData.map(d => ({
-      name: d.name,
-      y: d.y,
-      pointWidth: (d.z / maxZ) * maxPointWidth,
-      originalValues: d.originalValues
-    }));
+    const dataWithWidth = rawData.map(d => {
+      const scaledWidth = (d.z / maxZ) * maxWidth;
+      return {
+        name: d.name,
+        y: d.y,
+        pointWidth: Math.max(scaledWidth, minWidth),
+        originalValues: d.originalValues
+      };
+    });
 
     Highcharts.chart('chart-container', {
       chart: {
@@ -93,7 +97,7 @@ looker.plugins.visualizations.add({
       plotOptions: {
         column: {
           groupPadding: 0,
-          pointPadding: 0.01,
+          pointPadding: 0,
           borderWidth: 0,
           dataLabels: {
             enabled: true,
