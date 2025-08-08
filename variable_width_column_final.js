@@ -1,103 +1,81 @@
 looker.plugins.visualizations.add({
   id: "variable_width_column_final",
   label: "Variable Width Column High",
+  options: {},
 
-  dependencies: [
-    "https://code.highcharts.com/highcharts.js",
-    "https://code.highcharts.com/modules/variwide.js"
-  ],
+  // Carregar Highcharts + variwide
+  create: function (element, config) {
+    element.innerHTML = `<div id="chart" style="width:100%; height:100%;"></div>`;
 
-  options: {
-    xAxisRotation: {
-      type: "number",
-      label: "X-axis Label Rotation",
-      default: 0
-    },
-    showDataLabels: {
-      type: "boolean",
-      label: "Show Data Labels",
-      default: true
-    }
+    // Limpa erros antigos
+    if (document.getElementById("highcharts-script")) return;
+
+    const script = document.createElement("script");
+    script.id = "highcharts-script";
+    script.src = "https://code.highcharts.com/highcharts.js";
+    script.onload = () => {
+      const variwideScript = document.createElement("script");
+      variwideScript.src = "https://code.highcharts.com/modules/variwide.js";
+      document.head.appendChild(variwideScript);
+    };
+    document.head.appendChild(script);
   },
 
-  create: function(element, config) {
-    element.innerHTML = "<div id='chart' style='width: 100%; height: 100%;'></div>";
-    this.container = element;
-  },
-
-  updateAsync: function(data, element, config, queryResponse, details, done) {
+  updateAsync: function (data, element, config, queryResponse, details, done) {
     try {
-      if (
-        queryResponse.fields.dimensions.length < 1 ||
-        queryResponse.fields.measures.length < 2
-      ) {
-        this.container.innerHTML = "<div style='color: red;'>This chart requires at least 1 dimension and 2 measures.</div>";
+      // Validar dados
+      if (!data || data.length === 0) {
+        element.innerHTML = "No data available.";
         done();
         return;
       }
 
-      const dimension = queryResponse.fields.dimensions[0];
-      const measureY = queryResponse.fields.measures[0];
-      const measureWidth = queryResponse.fields.measures[1];
+      // Garantir que Highcharts foi carregado
+      if (typeof Highcharts === "undefined" || !Highcharts.chart) {
+        element.innerHTML = "Error: Highcharts is not defined. Please ensure the Highcharts library is available.";
+        done();
+        return;
+      }
 
-      const categories = [];
-      const chartData = [];
+      // Pegar nomes das colunas
+      const dimension = queryResponse.fields.dimensions[0].name;
+      const measureY = queryResponse.fields.measures[0].name;
+      const measureZ = queryResponse.fields.measures[1]?.name;
 
-      data.forEach(row => {
-        const category = LookerCharts.Utils.textForCell(row[dimension.name]);
-        const y = row[measureY.name]?.value || 0;
-        const z = row[measureWidth.name]?.value || 1;
+      // Montar os dados
+      const chartData = data.map(d => ({
+        name: d[dimension].value,
+        y: d[measureY].value,
+        z: d[measureZ]?.value || 1
+      }));
 
-        categories.push(category);
-        chartData.push([category, y, z]); // [name, y, z]
-      });
-
-      Highcharts.chart('chart', {
+      // Renderizar gráfico
+      Highcharts.chart("chart", {
         chart: {
-          type: 'variwide',
-          accessibility: {
-            enabled: false
-          }
+          type: "variwide"
         },
-        title: { text: null },
+        title: { text: "" },
         xAxis: {
-          type: 'category',
-          categories: categories,
-          labels: {
-            rotation: config.xAxisRotation || 0
-          }
+          type: "category",
+          title: { text: dimension },
         },
         yAxis: {
-          title: {
-            text: measureY.label
-          }
+          title: { text: measureY },
         },
         tooltip: {
-          pointFormat: `
-            <b>{point.name}</b><br>
-            ${measureY.label}: <b>{point.y:,.0f}</b><br>
-            ${measureWidth.label}: <b>{point.z:,.0f}</b>
-          `
-        },
-        plotOptions: {
-          variwide: {
-            dataLabels: {
-              enabled: config.showDataLabels,
-              format: '{point.y:,.0f}'
-            }
-          }
+          pointFormat: `<b>{point.name}</b><br/>${measureY}: <b>{point.y}</b><br/>${measureZ}: <b>{point.z}</b>`
         },
         series: [{
-          name: measureY.label,
-          data: chartData
+          name: measureY,
+          data: chartData,
         }],
         credits: { enabled: false }
       });
 
-      done();
     } catch (err) {
-      this.container.innerHTML = `<div style="color: red;">Error rendering visualization:<br>${err}</div>`;
-      done();
+      element.innerHTML = `<span style="color:red">Visualization error: ${err.message}</span>`;
     }
+
+    done();
   }
 });
