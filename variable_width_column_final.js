@@ -14,7 +14,7 @@ looker.plugins.visualizations.add({
     }
 
     if (!window.Highcharts || !window.Highcharts.exporting) {
-      loadScript("https://code.highcharts.com/highcharts.js", () => {
+      loadScript("https://cdn.jsdelivr.net/npm/highcharts@10.3.3/highcharts.min.js", () => {
         this.highchartsLoaded = true;
       });
     } else {
