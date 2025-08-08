@@ -92,8 +92,8 @@ looker.plugins.visualizations.add({
       },
       plotOptions: {
         column: {
-          groupPadding: 0.05,
-          pointPadding: 0.05,
+          groupPadding: 0,
+          pointPadding: 0.01,
           borderWidth: 0,
           dataLabels: {
             enabled: true,
