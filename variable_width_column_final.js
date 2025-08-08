@@ -16,11 +16,7 @@ looker.plugins.visualizations.add({
 
     if (!window.Highcharts || !window.Highcharts.exporting) {
       loadScript("https://code.highcharts.com/highcharts.js", () => {
-        loadScript("https://code.highcharts.com/modules/exporting.js", () => {
-          loadScript("https://code.highcharts.com/modules/export-data.js", () => {
-            this.highchartsLoaded = true;
-          });
-        });
+        this.highchartsLoaded = true;
       });
     } else {
       this.highchartsLoaded = true;
@@ -33,14 +29,14 @@ looker.plugins.visualizations.add({
       return;
     }
 
-    const dimension = queryResponse.fields.dimensions[0].name;
-    const measure = queryResponse.fields.measures[0].name;
-    const volumeField = queryResponse.fields.measures[1]?.name;
+    const dimension = queryResponse.fields.dimensions[0];
+    const measure = queryResponse.fields.measures[0];
+    const volumeField = queryResponse.fields.measures[1];
 
     const rawData = data.map(row => ({
-      name: row[dimension].value,
-      y: row[measure].value,
-      z: volumeField ? row[volumeField].value : 100
+      name: row[dimension.name].value,
+      y: row[measure.name].value,
+      z: volumeField ? row[volumeField.name].value : 100
     }));
 
     const maxZ = Math.max(...rawData.map(d => d.z));
@@ -55,26 +51,25 @@ looker.plugins.visualizations.add({
     Highcharts.chart('chart-container', {
       chart: {
         type: 'column',
-        animation: { duration: 1000 }
+        animation: { duration: 1000 },
+        spacingTop: 20
       },
-      title: {
-        text: 'Clientes: Receita (Altura) x Volume (Largura)'
-      },
-      subtitle: {
-        text: 'Altura = Receita (USD), Largura = Volume proporcional'
-      },
+      title: { text: null },
+      subtitle: { text: null },
       xAxis: {
         type: 'category',
-        title: { text: 'Clientes' },
+        title: { text: dimension.label },
         labels: { rotation: -45 }
       },
       yAxis: {
         min: 0,
-        title: { text: 'Receita (USD)' }
+        title: { text: measure.label }
       },
       tooltip: {
         headerFormat: '<b>{point.name}</b><br>',
-        pointFormat: 'Receita: ${point.y:,.0f}<br>Largura proporcional ao volume'
+        pointFormat:
+          measure.label + ': ${point.y:,.0f}' +
+          (volumeField ? '<br>' + volumeField.label + ': {point.pointWidth:.0f}' : '')
       },
       plotOptions: {
         column: {
@@ -84,11 +79,10 @@ looker.plugins.visualizations.add({
           }
         }
       },
-      exporting: {
-        enabled: true
-      },
+      exporting: { enabled: false },
+      credits: { enabled: false },
       series: [{
-        name: 'Receita',
+        name: measure.label,
         data: dataWithWidth,
         colorByPoint: true
       }]
