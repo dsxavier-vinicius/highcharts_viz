@@ -44,6 +44,7 @@ looker.plugins.visualizations.add({
     const dataWithWidth = rawData.map(d => ({
       name: d.name,
       y: d.y,
+      zValue: d.z,  // <- guardando o valor real para usar na tooltip
       pointWidth: (d.z / maxZ) * maxPointWidth
     }));
 
@@ -67,8 +68,8 @@ looker.plugins.visualizations.add({
       tooltip: {
         headerFormat: '<b>{point.name}</b><br>',
         pointFormat:
-          measure.label + ': ${point.y:,.0f}' +
-          (volumeField ? '<br>' + volumeField.label + ': {point.pointWidth:.0f}' : '')
+          measure.label + ': <b>${point.y:,.0f}</b>' +
+          (volumeField ? '<br>' + volumeField.label + ': <b>{point.zValue:,.0f}</b>' : '')
       },
       plotOptions: {
         column: {
