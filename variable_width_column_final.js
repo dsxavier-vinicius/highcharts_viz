@@ -17,7 +17,7 @@ looker.plugins.visualizations.add({
   },
 
   create: function(element, config) {
-    element.innerHTML = '<div id="chart-container" style="width:100%; height:500px;"></div>';
+    element.innerHTML = '<div id="chart-container" style="width:50%; height:500px;"></div>';
 
     function loadScript(src, callback) {
       const script = document.createElement('script');
@@ -56,7 +56,7 @@ looker.plugins.visualizations.add({
     }));
 
     const maxZ = Math.max(...rawData.map(d => d.z));
-    const maxPointWidth = 50;
+    const maxPointWidth = 100;
 
     const dataWithWidth = rawData.map(d => ({
       name: d.name,
@@ -69,7 +69,7 @@ looker.plugins.visualizations.add({
       chart: {
         type: 'column',
         animation: { duration: 1000 },
-        spacingTop: 5
+        spacingTop: 20
       },
       title: { text: null },
       subtitle: { text: null },
