@@ -17,7 +17,7 @@ looker.plugins.visualizations.add({
   },
 
   create: function(element, config) {
-    element.innerHTML = '<div id="chart-container" style="width:100%; height:100px;"></div>';
+    element.innerHTML = '<div id="chart-container" style="width:100%; height:500px;"></div>';
 
     function loadScript(src, callback) {
       const script = document.createElement('script');
