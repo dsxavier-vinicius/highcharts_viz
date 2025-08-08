@@ -1,7 +1,7 @@
 
 looker.plugins.visualizations.add({
   id: "variable_width_column_final",
-  label: "Variable Width Column",
+  label: "Variable Width Column High",
   options: {},
 
   create: function(element, config) {
