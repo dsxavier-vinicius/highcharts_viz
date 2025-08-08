@@ -69,7 +69,7 @@ looker.plugins.visualizations.add({
       chart: {
         type: 'column',
         animation: { duration: 1000 },
-        spacingTop: 20
+        spacingTop: 5
       },
       title: { text: null },
       subtitle: { text: null },
