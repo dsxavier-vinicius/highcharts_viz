@@ -3,110 +3,121 @@ looker.plugins.visualizations.add({
   label: "Variable Width Column High",
   options: {
     bar_color: {
-      type: 'string',
-      label: 'Bar Color',
-      display: 'color',
-      default: '#7ED6DF'
+      type: "string",
+      label: "Bar Color",
+      display: "color",
+      default: "#FF9999"
     },
     color_by_point: {
-      type: 'boolean',
-      label: 'Color by Point',
-      default: true
+      type: "boolean",
+      label: "Color by Point",
+      default: false
+    },
+    palette: {
+      type: "string",
+      label: "Color Palette",
+      display: "select",
+      default: "default",
+      values: [
+        { "Looker Default": "default" },
+        { "Gray": "gray" },
+        { "Blue": "blue" },
+        { "Purple": "purple" },
+        { "Orange": "orange" },
+        { "Green": "green" },
+        { "Pink": "pink" },
+        { "Teal": "teal" }
+      ]
     }
   },
 
   create: function (element, config) {
-    element.innerHTML = '<div id="chart-container" style="width:100%; height:500px;"></div>';
-
-    function loadScript(src, callback) {
-      const script = document.createElement('script');
-      script.src = src;
-      script.onload = callback;
-      document.head.appendChild(script);
-    }
-
-    if (!window.Highcharts) {
-      loadScript("https://code.highcharts.com/highcharts.js", () => {
-        this.highchartsLoaded = true;
-      });
-    } else {
-      this.highchartsLoaded = true;
-    }
+    element.innerHTML = "<div id='chart'></div>";
   },
 
   updateAsync: function (data, element, config, queryResponse, details, done) {
-    if (!this.highchartsLoaded) {
-      setTimeout(() => this.updateAsync(data, element, config, queryResponse, details, done), 100);
-      return;
-    }
+    try {
+      if (queryResponse.fields.dimensions.length < 2 || queryResponse.fields.measures.length < 1) {
+        element.innerHTML = "This chart requires 2 dimensions and 1 measure.";
+        return done();
+      }
 
-    const dimension = queryResponse.fields.dimensions[0];
-    const measure = queryResponse.fields.measures[0];
-    const volumeField = queryResponse.fields.measures[1];
+      const xLabels = [];
+      const yValues = [];
+      const widths = [];
 
-    const rawData = data.map(row => ({
-      name: row[dimension.name].value,
-      y: row[measure.name].value,
-      z: volumeField ? row[volumeField.name].value : 100
-    }));
+      data.forEach(row => {
+        xLabels.push(row[queryResponse.fields.dimensions[0].name].value);
+        widths.push(Number(row[queryResponse.fields.dimensions[1].name].value));
+        yValues.push(Number(row[queryResponse.fields.measures[0].name].value));
+      });
 
-    const maxZ = Math.max(...rawData.map(d => d.z));
-    const maxPointWidth = 100;
+      const barColor = config.bar_color || "#FF9999";
+      const useColorByPoint = config.color_by_point;
 
-    const dataWithWidth = rawData.map(d => ({
-      name: d.name,
-      y: d.y,
-      pointWidth: (d.z / maxZ) * maxPointWidth
-    }));
+      let colors = [];
+      if (useColorByPoint) {
+        const palette = LookerCharts.Utils.getPalette(config.palette || "default");
+        colors = palette.colors.slice(0, xLabels.length);
+      }
 
-    // Paleta do Looker (caso colorByPoint esteja ativo)
-    const lookerColors = Object.keys(config.series_colors || {})
-      .sort()
-      .map(k => config.series_colors[k]);
+      const seriesData = xLabels.map((label, i) => ({
+        name: label,
+        y: yValues[i],
+        pointWidth: widths[i],
+        color: useColorByPoint ? colors[i] : barColor
+      }));
 
-    const useColorByPoint = config.color_by_point === true;
-
-    Highcharts.chart('chart-container', {
-      chart: {
-        type: 'column',
-        animation: { duration: 1000 },
-        spacingTop: 20
-      },
-      title: { text: null },
-      subtitle: { text: null },
-      xAxis: {
-        type: 'category',
-        title: { text: dimension.label },
-        labels: { rotation: -45 }
-      },
-      yAxis: {
-        min: 0,
-        title: { text: measure.label }
-      },
-      tooltip: {
-        headerFormat: '<b>{point.name}</b><br>',
-        pointFormat:
-          measure.label + ': ${point.y:,.0f}' +
-          (volumeField ? `<br>${volumeField.label}: {point.pointWidth:.0f}` : '')
-      },
-      plotOptions: {
-        column: {
-          dataLabels: {
-            enabled: true,
-            format: '${y:,.0f}'
+      Highcharts.chart("chart", {
+        chart: {
+          type: "column"
+        },
+        title: {
+          text: null
+        },
+        xAxis: {
+          categories: xLabels,
+          labels: {
+            rotation: -45
+          }
+        },
+        yAxis: {
+          title: {
+            text: queryResponse.fields.measures[0].label
+          }
+        },
+        legend: {
+          enabled: true
+        },
+        series: [{
+          name: queryResponse.fields.measures[0].label,
+          data: seriesData,
+          showInLegend: true
+        }],
+        tooltip: {
+          pointFormat: '{series.name}: <b>{point.y:,.0f}</b>'
+        },
+        plotOptions: {
+          column: {
+            dataLabels: {
+              enabled: true,
+              formatter: function () {
+                return Highcharts.numberFormat(this.y, 0);
+              },
+              style: {
+                fontWeight: "bold",
+                color: "black"
+              }
+            }
           }
         }
-      },
-      exporting: { enabled: false },
-      credits: { enabled: false },
-      colors: useColorByPoint ? lookerColors : [config.bar_color],
-      series: [{
-        name: measure.label,
-        data: dataWithWidth,
-        colorByPoint: useColorByPoint
-      }]
-    });
+      });
 
-    done();
+      done();
+    } catch (error) {
+      element.innerHTML = "Error: " + error.message;
+      console.error(error);
+      done();
+    }
   }
 });
