@@ -2,101 +2,92 @@ looker.plugins.visualizations.add({
   id: "variable_width_column_final",
   label: "Variable Width Column High",
   options: {},
-
-  create: function (element, config) {
-    const highchartsScript = document.createElement("script");
-    highchartsScript.src = "https://code.highcharts.com/highcharts.js";
-    highchartsScript.onload = () => {
-      this._loaded = true;
-    };
-    document.head.appendChild(highchartsScript);
-
-    const container = document.createElement("div");
-    container.id = "chart";
-    container.style.width = "100%";
-    container.style.height = "100%";
-    element.appendChild(container);
-    this.container = container;
+  create: function(element, config) {
+    element.innerHTML = "<div id='container' style='width: 100%; height: 100%;'></div>";
   },
+  updateAsync: function(data, element, config, queryResponse, details, done) {
+    const container = element.querySelector("#container");
+    container.innerHTML = "";
 
-  updateAsync: function (data, element, config, queryResponse, details, done) {
-    if (!this._loaded || typeof Highcharts === "undefined") {
-      done();
-      return;
-    }
-
-    if (queryResponse.fields.dimensions.length < 1 || queryResponse.fields.measures.length < 2) {
-      this.container.innerHTML = "<div style='color:red;'>Please select at least 1 dimension and 2 measures.</div>";
-      done();
-      return;
-    }
-
-    const dimension = queryResponse.fields.dimensions[0];
+    const xDimension = queryResponse.fields.dimensions[0];
     const heightMeasure = queryResponse.fields.measures[0];
     const widthMeasure = queryResponse.fields.measures[1];
 
-    const categories = [];
-    const seriesData = [];
+    if (!xDimension || !heightMeasure || !widthMeasure) {
+      container.innerHTML = "<p>Insira pelo menos uma dimensão e duas medidas.</p>";
+      done();
+      return;
+    }
 
-    data.forEach(row => {
-      const category = row[dimension.name].value;
-      const height = row[heightMeasure.name].value;
-      const width = row[widthMeasure.name].value;
+    const categories = data.map(row => LookerCharts.Utils.textForCell(row[xDimension]));
+    const chartData = data.map((row, i) => {
+      const height = +row[heightMeasure].value;
+      const width = +row[widthMeasure].value;
+      const color = Highcharts.getOptions().colors[i % Highcharts.getOptions().colors.length];
 
-      categories.push(category);
-      seriesData.push({
-        y: Number(height),
-        z: Number(width),
-        name: category,
+      return {
+        x: i,
+        y: height,
+        width: width,
+        color: color,
+        name: categories[i],
         custom: {
-          heightLabel: row[heightMeasure.name].rendered || height,
-          widthLabel: row[widthMeasure.name].rendered || width,
+          xValue: LookerCharts.Utils.textForCell(row[xDimension]),
+          heightLabel: `${heightMeasure.label}: ${LookerCharts.Utils.textForCell(row[heightMeasure])}`,
+          widthLabel: `${widthMeasure.label}: ${LookerCharts.Utils.textForCell(row[widthMeasure])}`
         }
-      });
+      };
     });
 
-    Highcharts.chart(this.container, {
+    const totalWidth = chartData.reduce((acc, d) => acc + d.width, 0);
+    chartData.forEach(point => point.pointWidth = (point.width / totalWidth) * 800);
+
+    Highcharts.chart(container, {
       chart: {
-        type: 'column'
+        type: 'column',
+        spacing: [10, 10, 15, 10],
+        animation: true,
       },
       title: { text: null },
-      subtitle: { text: null },
-      exporting: { enabled: false },
-      credits: { enabled: false },
       xAxis: {
         categories: categories,
-        title: { text: dimension.label }
+        labels: { rotation: -30, style: { fontSize: '12px' } },
+        title: { text: xDimension.label }
       },
       yAxis: {
         title: { text: heightMeasure.label }
       },
-      legend: { enabled: false },
       tooltip: {
-        formatter: function () {
-          return `<b>${this.key}</b><br>${heightMeasure.label}: ${this.point.custom.heightLabel}<br>${widthMeasure.label}: ${this.point.custom.widthLabel}`;
+        useHTML: true,
+        formatter: function() {
+          return `<b>${this.point.custom.xValue}</b><br/>` +
+                 `${this.point.custom.heightLabel}<br/>` +
+                 `${this.point.custom.widthLabel}`;
         }
       },
+      legend: { enabled: false },
+      credits: { enabled: false },
+      exporting: { enabled: false },
       plotOptions: {
         column: {
-          pointPadding: 0,
-          borderWidth: 0,
-          pointWidth: null,
-          groupPadding: 0,
           grouping: false,
-          point: {
-            events: {}
+          shadow: false,
+          borderWidth: 0,
+          pointPadding: 0.2,
+          groupPadding: 0.15,
+          pointWidth: null,
+          dataLabels: {
+            enabled: true,
+            formatter: function() {
+              return Highcharts.numberFormat(this.y, 0, ",", ".");
+            },
+            style: { fontWeight: 'bold', fontSize: '10px' }
           }
-        },
-        series: {
-          pointWidth: undefined,
-          minPointLength: 1,
         }
       },
       series: [{
         name: heightMeasure.label,
-        data: seriesData,
-        colorByPoint: true,
-        pointWidth: null,
+        data: chartData
       }]
     });
 
