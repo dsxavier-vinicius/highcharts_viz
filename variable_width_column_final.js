@@ -1,7 +1,20 @@
 looker.plugins.visualizations.add({
   id: "variable_width_column_final",
   label: "Variable Width Column High",
-  options: {},
+
+  options: {
+    bar_color: {
+      type: "string",
+      label: "Bar Color",
+      default: "#3399ff",
+      display: "color"
+    },
+    color_by_point: {
+      type: "boolean",
+      label: "Color by Point",
+      default: true
+    }
+  },
 
   create: function(element, config) {
     element.innerHTML = '<div id="chart-container" style="width:100%; height:500px;"></div>';
@@ -13,8 +26,8 @@ looker.plugins.visualizations.add({
       document.head.appendChild(script);
     }
 
-    if (!window.Highcharts || !window.Highcharts.exporting) {
-      loadScript("https://cdn.jsdelivr.net/npm/highcharts@10.3.3/highcharts.min.js", () => {
+    if (!window.Highcharts || !window.Highcharts.chart) {
+      loadScript("https://code.highcharts.com/highcharts.js", () => {
         this.highchartsLoaded = true;
       });
     } else {
@@ -35,7 +48,11 @@ looker.plugins.visualizations.add({
     const rawData = data.map(row => ({
       name: row[dimension.name].value,
       y: row[measure.name].value,
-      z: volumeField ? row[volumeField.name].value : 100
+      z: volumeField ? row[volumeField.name].value : 100,
+      originalValues: {
+        measure: row[measure.name].value,
+        volume: volumeField ? row[volumeField.name].value : null
+      }
     }));
 
     const maxZ = Math.max(...rawData.map(d => d.z));
@@ -44,8 +61,8 @@ looker.plugins.visualizations.add({
     const dataWithWidth = rawData.map(d => ({
       name: d.name,
       y: d.y,
-      zValue: d.z,  // <- guardando o valor real para usar na tooltip
-      pointWidth: (d.z / maxZ) * maxPointWidth
+      pointWidth: (d.z / maxZ) * maxPointWidth,
+      originalValues: d.originalValues
     }));
 
     Highcharts.chart('chart-container', {
@@ -66,10 +83,12 @@ looker.plugins.visualizations.add({
         title: { text: measure.label }
       },
       tooltip: {
-        headerFormat: '<b>{point.name}</b><br>',
-        pointFormat:
-          measure.label + ': <b>${point.y:,.0f}</b>' +
-          (volumeField ? '<br>' + volumeField.label + ': <b>{point.zValue:,.0f}</b>' : '')
+        formatter: function () {
+          const val1 = Highcharts.numberFormat(this.point.originalValues.measure, 0);
+          const val2 = volumeField ? Highcharts.numberFormat(this.point.originalValues.volume, 0) : null;
+          return `<b>${this.point.name}</b><br>${measure.label}: $${val1}` +
+            (volumeField ? `<br>${volumeField.label}: ${val2}` : '');
+        }
       },
       plotOptions: {
         column: {
@@ -84,7 +103,8 @@ looker.plugins.visualizations.add({
       series: [{
         name: measure.label,
         data: dataWithWidth,
-        colorByPoint: true
+        color: config.bar_color,
+        colorByPoint: config.color_by_point
       }]
     });
 
