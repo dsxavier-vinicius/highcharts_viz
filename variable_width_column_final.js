@@ -1,7 +1,7 @@
 
 looker.plugins.visualizations.add({
   id: "variable_width_column_final",
-  label: "Variable Width Column (Receita vs Volume)",
+  label: "Variable Width Column",
   options: {},
 
   create: function(element, config) {
